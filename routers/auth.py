@@ -8,20 +8,6 @@ JWT_SECRET = config("secret")
 JWT_ALGORITHM = config("algorithm")
 
 
-def check_user(user: UserCreate, db: Session = Depends(get_db)):
-    """
-    Check user in db
-    """
-    try:
-        user_db = db.query(User).filter(User.login == user.login).first()
-        varify_password = pwd_context.verify(user.password, user_db.password)
-        if user_db and varify_password:
-            return True
-        return False
-    except:
-        False
-
-
 def token_response(token: str):
     return {"access_token": token}
 
@@ -52,3 +38,12 @@ def transferJWT(user_id: str) -> str:
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
     return token
+
+
+def logoutJWT(token: str):
+    try:
+        decoded_token = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        decoded_token["expires"] = time.time()
+        return True
+    except:
+        return False

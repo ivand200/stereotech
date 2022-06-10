@@ -3,17 +3,14 @@ from typing import List, Optional
 from pydantic import BaseModel, validator
 
 
-class UserBase(Base):
-    username: str
-
-    class Config:
-        orm_mode = True
+class UserBase(BaseModel):
+    username: Optional[str]
 
 
 class UserCreate(UserBase):
     password: str
 
-        @validator("password")
+    @validator("password")
     def valid_password(cls, value):
         if len(value) < 8:
             raise ValueError("Password should be at least 8 chars")
@@ -23,9 +20,12 @@ class UserCreate(UserBase):
             raise ValueError("Password should contains at least one capital letter")
         return value
 
+    class Config:
+        orm_mode = True
+
 
 class UserPublic(UserBase):
-    id: int
+    id: Optional[int]
 
     class Config:
         orm_mode = True
