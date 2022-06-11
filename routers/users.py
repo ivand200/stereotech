@@ -1,9 +1,13 @@
+# TODO: tests
+# TODO: Docker
+
 import time
 import logging
 import sys
 from typing import Dict, Optional
 
 from fastapi import APIRouter, Body, status, Depends, HTTPException, Header, Body
+from fastapi.security import APIKeyHeader
 from sqlalchemy.orm import Session
 from passlib.context import CryptContext
 from passlib.context import CryptContext
@@ -12,8 +16,8 @@ import jwt
 from decouple import config
 from db import get_db
 from schemas.users import UserCreate, UserPublic
-from models.users import User
-from .auth import signJWT, decodeJWT, logoutJWT
+from models.users import User, Blacklist
+from .auth import signJWT, decodeJWT
 
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -30,13 +34,24 @@ logger.addHandler(handler)
 
 router = APIRouter()
 
+api_key_header = APIKeyHeader(name="Token")
 
-def get_user_or_404(id: int, db: Session = Depends(get_db)) -> UserPublic:
-    select_user = db.query(User).filter(User.id == id).first()
-    if not select_user:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    return UserPublic(username=select_user.username, id=select_user.id)
+def blacklist_check(token: str, db: Session = Depends(get_db)) -> bool:
+    """
+    Check token in blacklist
+    """
+    check = db.query(Blacklist).filter(Blacklist.token == token).first()
+    if check:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+
+
+# def get_user_or_404(id: int, db: Session = Depends(get_db)) -> UserPublic:
+#     select_user = db.query(User).filter(User.id == id).first()
+#     if not select_user:
+#         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+#
+#     return UserPublic(username=select_user.username, id=select_user.id)
 
 
 def check_user(user: UserCreate, db: Session = Depends(get_db)):
@@ -53,21 +68,15 @@ def check_user(user: UserCreate, db: Session = Depends(get_db)):
         False
 
 
-@router.get("/test/{id}")
-def test(id: int, db: Session = Depends(get_db)):
-    x = get_user_or_404(id, db)
-    return x
-
-
 @router.post("/registration", response_model=UserPublic, status_code=status.HTTP_201_CREATED)
 async def user_create(user: UserCreate, db: Session = Depends(get_db)):
     """
     New user registration
     """
-    # logger
+    logger.info(f"Create user: {user.username}")
     user_db = db.query(User).filter(User.username == user.username).first()
     if user_db:
-        raise HTTPException(status_code=400, detail="login already exist.")
+        raise HTTPException(status_code=400, detail="Username already exist.")
     hashed_password = pwd_context.hash(user.password)
     new_user = User(username=user.username, password=hashed_password)
     db.add(new_user)
@@ -81,7 +90,7 @@ async def user_login(user: UserCreate, db: Session = Depends(get_db)):
     """
     Login existing user
     """
-    # logging
+    logger.info(f"User login: {user.username}")
     if check_user(user, db):
         return signJWT(user.username)
     raise HTTPException(status_code=403, detail="Unauthorized")
@@ -89,41 +98,71 @@ async def user_login(user: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def exit_user(
-    Authorization: Optional[str] = Header(...)
+    db: Session = Depends(get_db),
+    token: str = Depends(api_key_header),
 ):
     """
     Exit user
     """
-    result = logoutJWT(Authorization)
-    return result
+    token_jwt = decodeJWT(token)
+    if not token_jwt:
+        raise HTTPException(status_code=401, detail="Acces denied")
+    token_blacklist = Blacklist(token=token)
+    logger.info(f"User logout: {token_jwt}")
+    db.add(token_blacklist)
+    db.commit()
+    return True
 
 
 @router.post("/refresh_jwt", status_code=status.HTTP_201_CREATED)
 async def refresh_token(
-    Authorization: Optional[str] = Header(...),
+    token: str = Depends(api_key_header),
     db: Session = Depends(get_db),
 ):
     """
     Refresh user token
     """
-    token = decodeJWT(Authorization)
-    if not token:
+    token_jwt = decodeJWT(token)
+    if not token_jwt:
         raise HTTPException(status_code=401, detail="Acces denied")
+    logger.info(f"User token refresh: {token_jwt}")
     return signJWT(token["user_id"])
-
-
 
 
 @router.get("/user", response_model=UserPublic, status_code=status.HTTP_200_OK)
 async def get_user(
-    Authorization: Optional[str] = Header(...),
-    db: Session = Depends(get_db)
+    token: str = Depends(api_key_header),
+    db: Session = Depends(get_db),
 ):
     """
     Get user information
     """
-    token = decodeJWT(Authorization)
-    if not token:
+    blacklist = blacklist_check(token, db)
+    token_jwt = decodeJWT(token)
+    if not token_jwt:
         raise HTTPException(status_code=401, detail="Acces denied")
-    user = db.query(User).filter(User.username == token["user_id"]).first()
+    user = db.query(User).filter(User.username == token_jwt["user_id"]).first()
+    logger.info(f"Get user info: {user.id, user.username}")
     return user
+
+
+@router.delete("/user/{id}", status_code=status.HTTP_204_NO_CONTENT)
+async def user_delete(
+    id: int,
+    token: str = Depends(api_key_header),
+    db: Session = Depends(get_db)
+):
+    """
+    Delete user by id
+    """
+    blacklist = blacklist_check(token, db)
+    token_jwt = decodeJWT(token)
+    if not token_jwt:
+        raise HTTPException(status_code=401, detail="Acces denied")
+    user_to_delete = db.query(User).filter(User.username == token_jwt["user_id"], User.id == id).first()
+    if not user_to_delete:
+        raise HTTPException(status_code=404, detail="Id not found")
+    logging.info(f"User delete : {user_to_delete.id, user_to_delete.username}")
+    db.delete(user_to_delete)
+    db.commit()
+    return "ok"

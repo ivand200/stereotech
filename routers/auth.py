@@ -1,4 +1,5 @@
 import time
+import datetime
 from typing import Dict
 
 import jwt
@@ -38,12 +39,3 @@ def transferJWT(user_id: str) -> str:
     token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
     return token
-
-
-def logoutJWT(token: str):
-    try:
-        decoded_token = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        decoded_token["expires"] = time.time()
-        return True
-    except:
-        return False
