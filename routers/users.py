@@ -1,5 +1,5 @@
-# TODO: tests
 # TODO: Docker
+# TODO: Add celery for regular delete blacklist
 
 import time
 import logging
