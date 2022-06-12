@@ -1,6 +1,3 @@
-# TODO: Docker
-# TODO: Add celery for regular delete blacklist
-
 import time
 import logging
 import sys
@@ -27,7 +24,7 @@ JWT_ALGORITHM = config("algorithm")
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-handler =logging.StreamHandler(sys.stdout)
+handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter("%(asctime)s - %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
@@ -37,7 +34,7 @@ router = APIRouter()
 api_key_header = APIKeyHeader(name="Token")
 
 
-def blacklist_check(token: str, db: Session = Depends(get_db)) -> bool:
+def blacklist_check(token: str, db: Session = Depends(get_db)):
     """
     Check token in blacklist
     """
@@ -148,9 +145,7 @@ async def get_user(
 
 @router.delete("/user/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def user_delete(
-    id: int,
-    token: str = Depends(api_key_header),
-    db: Session = Depends(get_db)
+    id: int, token: str = Depends(api_key_header), db: Session = Depends(get_db)
 ):
     """
     Delete user by id
@@ -159,7 +154,11 @@ async def user_delete(
     token_jwt = decodeJWT(token)
     if not token_jwt:
         raise HTTPException(status_code=401, detail="Acces denied")
-    user_to_delete = db.query(User).filter(User.username == token_jwt["user_id"], User.id == id).first()
+    user_to_delete = (
+        db.query(User)
+        .filter(User.username == token_jwt["user_id"], User.id == id)
+        .first()
+    )
     if not user_to_delete:
         raise HTTPException(status_code=404, detail="Id not found")
     logging.info(f"User delete : {user_to_delete.id, user_to_delete.username}")
