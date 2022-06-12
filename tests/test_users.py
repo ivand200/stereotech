@@ -38,20 +38,12 @@ def test_login_user_info_logout():
     assert response_get_info_logout.status_code == 401
 
 
-def test_registration_login_deletion_user():
+def test_registration_login_delete_user():
     """
-    Request to create user
-    Request to create user with existing username
-    Request to create user with wrong password
-
-    Request to login with wrong login
-
-    Request to login with existing user
-
-    Request to delete user
-    Request to delete user with wrong id
-
-
+    Request to
+    Create,
+    Login,
+    Delete
     """
     payload = {
         "username": "usertest_11",
