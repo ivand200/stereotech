@@ -8,9 +8,13 @@ from db import engine
 from fastapi import Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import select, text
+from settings import Settings
+
+settings = Settings()
 
 celery = Celery(
-    broker_url = f"redis://:{config('redis_password')}@{config('redis_url')}",
+    broker_url = f"redis://:{settings.redis_password}@{settings.redis_url}",
+    # broker_url = f"redis://:{config('redis_password')}@{config('redis_url')}",
 )
 
 celery.conf.update(
